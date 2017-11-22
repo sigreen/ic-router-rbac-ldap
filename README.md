@@ -164,12 +164,72 @@ qsend amqps://127.0.0.1:5672/queue.foo -m Slave
 
 ### Setup LDAP connection to IC Router
 
-1. Ensure that the `cyrus-sasl-plain` package has been installed on your RHEL instance
-2. Copy `/ic/sasl.qdrouterd.conf` file to your RHEL instance.  Rename the file to `qdrouterd.conf` and replace the same file in `/etc/sasl2` directory.
-3. Restart your router.
-4. Test your LDAP connectivity using `qdstat`:
+1. Install the necessary cyrus-sasl libraries required by the router and also set up the listener.  The
+`cyrus-sasl` and `cyrus-sasl-plain` libraries need to be installed (`yum install cyrus-sasl cyrus-sasl-plain`). The client sends the user name and password in clear to the Router. Hence, in a production environment, this client-router communication needs to be done over a TLS connection.
 
+Setup the following listener in the router's config file (this is the config file you use to start the router) - port number can be to your choosing:
 ```
-qdstat -a --sasl-mechanisms=DIGEST-MD5 --sasl-username=admin --sasl-password=sunflower
-PN_TRACE_FRM=1 qdstat -a --sasl-mechanisms=DIGEST-MD5 --sasl-username=admin --sasl-password=sunflower
+listener {
+    addr: 0.0.0.0
+    port: 15677
+    role: normal
+    authenticatePeer: yes
+    saslMechanisms: PLAIN
+}
 ```
+Notice that this sets up the Router listener to use PLAIN as the the only mechanism used to communicate with the client. PLAIN is used because the user name and password needs to be passed in clear to the PAM authentication module.
+
+2. Configure Dispatch Router to use a program called saslauthd to connect to SSSD via PAM (Pluggable Authentication Modules).
+The sasl config file is usually found in the /etc/sasl2/qdrouterd.conf file. Add the following properties to this file:
+```
+pwcheck_method: saslauthd
+auxprop_plugin:pam
+mech_list: PLAIN
+```
+Notice that the `pwcheck_method` is set to `saslauthd` which is a program that is installed as part of the `cyrus-sasl` library installation (`yum install cyrus-sasl`). `saslauthd` is used to supply the user name and password to the pam module. Notice here that the `auxprop_plugin` is set to pam which instructs cyrus-sasl to enable authentication using PAM via saslauthd. The `mech_list` is set to `PLAIN`  to match the mech_list in step 1.
+
+Make sure that the `/etc/sysconfig/saslauthd` file contains
+`MECH=pam`
+
+This enables saslauthd to use PAM.
+
+3. Configure PAM
+Every application has to have its own config file in the `/etc/pam.d/` folder. The config file for Qpid Dispatch is called amqp. Open or create the `/etc/pam.d/amqp` file and add the following to it -
+`#%PAM-1.0
+auth    required  pam_securetty.so
+auth    required pam_nologin.so
+account required pam_unix.so
+session required pam_unix.so
+`
+What each of the above lines means is explained in detail here - https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/managing_smart_cards/pam_configuration_files
+The above PAM configuration is not production grade but works in my situation.
+
+4. Configure PAM service on SSSD - This instructs PAM to use SSSD to retrieve user information and is dealt with in detail here - https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/5/html/Deployment_Guide/Configuration_Options-PAM_Configuration_Options.html (I followed all steps in this link)
+(SSSD is already installed on RHEL 7 machines)
+
+5. Install Redhat IdM (Active Directory(AD) and any LDAP server can be used instead of Redhat IdM)
+https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/linux_domain_identity_authentication_and_policy_guide/install-server
+Skip this step if you are not using IdM
+
+6. Ask SSSD to discover AD or IdM services `realm discover test.example.com` - This instructs SSSD to discover a directory service running on the host test.example.com.
+Use - `realm discover --server-software=active-directory test.example.com` - to discovery AD
+If the discovery is successful, to join the system SSSD to an identity domain, use the realm join command and specify the domain name:
+```
+realm join test.example.com
+```
+SSSD will successfully join the realm. Test the whole setup with the testsaslauthd program that comes as part of the cyrus-sasl installation
+```
+[root@amq01 /]# testsaslauthd -u test -p test -r LAB.ENG.RDU2.REDHAT.COM -s amqp
+0: OK "Success."
+```
+If you don't get "OK", you are in trouble.
+
+To troubleshoot watch the output of `journalctl -f` as you run `testsaslauthd`
+
+7. In summary, now you have enabled SASL in Qpid Dispatch Router to talk to PAM which in turn talks to SSSD which in turn can talk to any directory service like AD, LDAP or IdM.
+
+8. Finally start the router and run qdstat
+
+`reset; PN_TRACE_FRM=1 qdstat -b 127.0.0.1:15677 -c --sasl-mechanisms=PLAIN --sasl-username=max@LAB.ENG.RDU2.REDHAT.COM --sasl-password=Abcd1234`
+
+Note here again the the saslMechanisms is set to PLAIN and the realm (LAB.ENG.RDU2.REDHAT.COM) is included as part of the user name.
