@@ -201,14 +201,13 @@ auth    required pam_nologin.so
 account required pam_unix.so
 session required pam_unix.so
 `
-What each of the above lines means is explained in detail here - https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/managing_smart_cards/pam_configuration_files
+What each of the above lines means is explained in detail in Section 2.2 [here](docs/pam-step-3.pdf)
 The above PAM configuration is not production grade but works in my situation.
 
-4. Configure PAM service on SSSD - This instructs PAM to use SSSD to retrieve user information and is dealt with in detail here - https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/5/html/Deployment_Guide/Configuration_Options-PAM_Configuration_Options.html (I followed all steps in this link)
+4. Configure PAM service on SSSD - This instructs PAM to use SSSD to retrieve user information and is dealt with in detail in Section 30.3.2 [here](docs/pam-step-4.pdf) (I followed all steps in this link)
 (SSSD is already installed on RHEL 7 machines)
 
-5. Install Redhat IdM (Active Directory(AD) and any LDAP server can be used instead of Redhat IdM)
-https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/linux_domain_identity_authentication_and_policy_guide/install-server
+5. Install Redhat IdM (Active Directory(AD) and any LDAP server can be used instead of Redhat IdM) in Section 2.3 [here](docs/pam-step-5.pdf).
 Skip this step if you are not using IdM
 
 6. Ask SSSD to discover AD or IdM services `realm discover test.example.com` - This instructs SSSD to discover a directory service running on the host test.example.com.
