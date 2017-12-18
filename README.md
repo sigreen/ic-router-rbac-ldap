@@ -229,6 +229,6 @@ To troubleshoot watch the output of `journalctl -f` as you run `testsaslauthd`
 
 8. Finally start the router and run qdstat
 
-`reset; PN_TRACE_FRM=1 qdstat -b 127.0.0.1:15677 -c --sasl-mechanisms=PLAIN --sasl-username=max@LAB.ENG.RDU2.REDHAT.COM --sasl-password=Abcd1234`
+`reset; PN_TRACE_FRM=1 qdstat -b amqps://127.0.0.1:15677 -c --sasl-mechanisms=PLAIN --sasl-username=max@LAB.ENG.RDU2.REDHAT.COM --sasl-password=Abcd1234`
 
 Note here again the the saslMechanisms is set to PLAIN and the realm (LAB.ENG.RDU2.REDHAT.COM) is included as part of the user name.
